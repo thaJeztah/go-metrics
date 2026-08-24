@@ -37,8 +37,8 @@ type Namespace struct {
 // WithConstLabels returns a namespace with the provided set of labels merged
 // with the existing constant labels on the namespace.
 //
-//  Only metrics created with the returned namespace will get the new constant
-//  labels.  The returned namespace must be registered separately.
+// Only metrics created with the returned namespace will get the new constant
+// labels. The returned namespace must be registered separately.
 func (n *Namespace) WithConstLabels(labels Labels) *Namespace {
 	n.mu.Lock()
 	ns := &Namespace{
@@ -265,6 +265,7 @@ func (n *Namespace) NewRequestTotalMetric(handlerName string) *HTTPMetric {
 	n.Add(httpMetric)
 	return httpMetric
 }
+
 func (n *Namespace) NewRequestDurationMetric(handlerName string, buckets []float64) *HTTPMetric {
 	if len(buckets) == 0 {
 		panic("DurationBuckets must be provided")
