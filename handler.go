@@ -40,12 +40,14 @@ func Handler() http.Handler {
 }
 
 func InstrumentHandler(metrics []*HTTPMetric, handler http.Handler) http.HandlerFunc {
-	return InstrumentHandlerFunc(metrics, handler.ServeHTTP)
+	return instrumentHandler(metrics, handler)
 }
 
 func InstrumentHandlerFunc(metrics []*HTTPMetric, handlerFunc http.HandlerFunc) http.HandlerFunc {
-	var handler http.Handler
-	handler = http.HandlerFunc(handlerFunc)
+	return instrumentHandler(metrics, handlerFunc)
+}
+
+func instrumentHandler(metrics []*HTTPMetric, handler http.Handler) http.HandlerFunc {
 	for _, metric := range metrics {
 		switch metric.handlerType {
 		case InstrumentHandlerResponseSize:
