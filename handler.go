@@ -22,9 +22,26 @@ const (
 	InstrumentHandlerInFlight
 )
 
+// HTTPMetric describes a metric used to instrument an HTTP handler.
+//
+// HTTPMetric values must be created using the HTTP metric methods on
+// [Namespace], such as [Namespace.NewDefaultHttpMetrics] or
+// [Namespace.NewHttpMetricsWithOpts].
 type HTTPMetric struct {
-	prometheus.Collector
+	collector   prometheus.Collector
 	handlerType int
+}
+
+var _ prometheus.Collector = (*HTTPMetric)(nil)
+
+// Describe implements [prometheus.Collector].
+func (m *HTTPMetric) Describe(ch chan<- *prometheus.Desc) {
+	m.collector.Describe(ch)
+}
+
+// Collect implements [prometheus.Collector].
+func (m *HTTPMetric) Collect(ch chan<- prometheus.Metric) {
+	m.collector.Collect(ch)
 }
 
 var (
@@ -51,23 +68,23 @@ func instrumentHandler(metrics []*HTTPMetric, handler http.Handler) http.Handler
 	for _, metric := range metrics {
 		switch metric.handlerType {
 		case InstrumentHandlerResponseSize:
-			if collector, ok := metric.Collector.(prometheus.ObserverVec); ok {
+			if collector, ok := metric.collector.(prometheus.ObserverVec); ok {
 				handler = promhttp.InstrumentHandlerResponseSize(collector, handler)
 			}
 		case InstrumentHandlerRequestSize:
-			if collector, ok := metric.Collector.(prometheus.ObserverVec); ok {
+			if collector, ok := metric.collector.(prometheus.ObserverVec); ok {
 				handler = promhttp.InstrumentHandlerRequestSize(collector, handler)
 			}
 		case InstrumentHandlerDuration:
-			if collector, ok := metric.Collector.(prometheus.ObserverVec); ok {
+			if collector, ok := metric.collector.(prometheus.ObserverVec); ok {
 				handler = promhttp.InstrumentHandlerDuration(collector, handler)
 			}
 		case InstrumentHandlerCounter:
-			if collector, ok := metric.Collector.(*prometheus.CounterVec); ok {
+			if collector, ok := metric.collector.(*prometheus.CounterVec); ok {
 				handler = promhttp.InstrumentHandlerCounter(collector, handler)
 			}
 		case InstrumentHandlerInFlight:
-			if collector, ok := metric.Collector.(prometheus.Gauge); ok {
+			if collector, ok := metric.collector.(prometheus.Gauge); ok {
 				handler = promhttp.InstrumentHandlerInFlight(collector, handler)
 			}
 		}

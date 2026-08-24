@@ -233,7 +233,7 @@ func (n *Namespace) NewHttpMetricsWithOpts(handlerName string, opts HTTPHandlerO
 
 func (n *Namespace) NewInFlightGaugeMetric(handlerName string) *HTTPMetric {
 	httpMetric := &HTTPMetric{
-		Collector: prometheus.NewGauge(prometheus.GaugeOpts{
+		collector: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace:   n.name,
 			Subsystem:   n.subsystem,
 			Name:        "in_flight_requests",
@@ -248,7 +248,7 @@ func (n *Namespace) NewInFlightGaugeMetric(handlerName string) *HTTPMetric {
 
 func (n *Namespace) NewRequestTotalMetric(handlerName string) *HTTPMetric {
 	httpMetric := &HTTPMetric{
-		Collector: prometheus.NewCounterVec(
+		collector: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace:   n.name,
 				Subsystem:   n.subsystem,
@@ -277,7 +277,7 @@ func (n *Namespace) NewRequestDurationMetric(handlerName string, buckets []float
 		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
 	httpMetric := &HTTPMetric{
-		Collector:   prometheus.NewHistogramVec(opts, []string{"method"}),
+		collector:   prometheus.NewHistogramVec(opts, []string{"method"}),
 		handlerType: InstrumentHandlerDuration,
 	}
 	n.Add(httpMetric)
@@ -297,7 +297,7 @@ func (n *Namespace) NewRequestSizeMetric(handlerName string, buckets []float64) 
 		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
 	httpMetric := &HTTPMetric{
-		Collector:   prometheus.NewHistogramVec(opts, []string{}),
+		collector:   prometheus.NewHistogramVec(opts, []string{}),
 		handlerType: InstrumentHandlerRequestSize,
 	}
 	n.Add(httpMetric)
@@ -317,7 +317,7 @@ func (n *Namespace) NewResponseSizeMetric(handlerName string, buckets []float64)
 		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
 	httpMetric := &HTTPMetric{
-		Collector:   prometheus.NewHistogramVec(opts, []string{}),
+		collector:   prometheus.NewHistogramVec(opts, []string{}),
 		handlerType: InstrumentHandlerResponseSize,
 	}
 	n.Add(httpMetric)
