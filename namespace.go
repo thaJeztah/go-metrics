@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -172,9 +171,9 @@ func (n *Namespace) NewDesc(name, help string, unit Unit, labels ...string) *pro
 	name = makeName(name, unit)
 	namespace := n.name
 	if n.subsystem != "" {
-		namespace = fmt.Sprintf("%s_%s", namespace, n.subsystem)
+		namespace += "_" + n.subsystem
 	}
-	name = fmt.Sprintf("%s_%s", namespace, name)
+	name = namespace + "_" + name
 	return prometheus.NewDesc(name, help, labels, prometheus.Labels(n.labels))
 }
 
@@ -196,8 +195,7 @@ func makeName(name string, unit Unit) string {
 	if unit == "" {
 		return name
 	}
-
-	return fmt.Sprintf("%s_%s", name, unit)
+	return name + "_" + string(unit)
 }
 
 func (n *Namespace) NewDefaultHttpMetrics(handlerName string) []*HTTPMetric {
