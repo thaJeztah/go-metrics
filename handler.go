@@ -29,7 +29,7 @@ type HTTPMetric struct {
 
 var (
 	defaultDurationBuckets     = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 60}
-	defaultRequestSizeBuckets  = prometheus.ExponentialBuckets(1024, 2, 22) //1K to 4G
+	defaultRequestSizeBuckets  = prometheus.ExponentialBuckets(1024, 2, 22) // 1K to 4G
 	defaultResponseSizeBuckets = defaultRequestSizeBuckets
 )
 
