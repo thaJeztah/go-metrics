@@ -2,9 +2,11 @@ package metrics
 
 import (
 	"maps"
+	"net/http"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Labels map[string]string
@@ -231,37 +233,38 @@ func (n *Namespace) NewHttpMetricsWithOpts(handlerName string, opts HTTPHandlerO
 	return httpMetrics
 }
 
+func (n *Namespace) newHTTPMetric(collector prometheus.Collector, wrap func(http.Handler) http.Handler) *HTTPMetric {
+	n.Add(collector)
+	return &HTTPMetric{collector: collector, wrap: wrap}
+}
+
 func (n *Namespace) NewInFlightGaugeMetric(handlerName string) *HTTPMetric {
-	httpMetric := &HTTPMetric{
-		collector: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace:   n.name,
-			Subsystem:   n.subsystem,
-			Name:        "in_flight_requests",
-			Help:        "The in-flight HTTP requests",
-			ConstLabels: withHandlerLabel(n.labels, handlerName),
-		}),
-		handlerType: InstrumentHandlerInFlight,
-	}
-	n.Add(httpMetric)
-	return httpMetric
+	collector := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace:   n.name,
+		Subsystem:   n.subsystem,
+		Name:        "in_flight_requests",
+		Help:        "The in-flight HTTP requests",
+		ConstLabels: withHandlerLabel(n.labels, handlerName),
+	})
+	return n.newHTTPMetric(collector, func(next http.Handler) http.Handler {
+		return promhttp.InstrumentHandlerInFlight(collector, next)
+	})
 }
 
 func (n *Namespace) NewRequestTotalMetric(handlerName string) *HTTPMetric {
-	httpMetric := &HTTPMetric{
-		collector: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace:   n.name,
-				Subsystem:   n.subsystem,
-				Name:        "requests_total",
-				Help:        "Total number of HTTP requests made.",
-				ConstLabels: withHandlerLabel(n.labels, handlerName),
-			},
-			[]string{"code", "method"},
-		),
-		handlerType: InstrumentHandlerCounter,
-	}
-	n.Add(httpMetric)
-	return httpMetric
+	collector := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace:   n.name,
+			Subsystem:   n.subsystem,
+			Name:        "requests_total",
+			Help:        "Total number of HTTP requests made.",
+			ConstLabels: withHandlerLabel(n.labels, handlerName),
+		},
+		[]string{"code", "method"},
+	)
+	return n.newHTTPMetric(collector, func(next http.Handler) http.Handler {
+		return promhttp.InstrumentHandlerCounter(collector, next)
+	})
 }
 
 func (n *Namespace) NewRequestDurationMetric(handlerName string, buckets []float64) *HTTPMetric {
@@ -276,12 +279,10 @@ func (n *Namespace) NewRequestDurationMetric(handlerName string, buckets []float
 		Buckets:     buckets,
 		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
-	httpMetric := &HTTPMetric{
-		collector:   prometheus.NewHistogramVec(opts, []string{"method"}),
-		handlerType: InstrumentHandlerDuration,
-	}
-	n.Add(httpMetric)
-	return httpMetric
+	collector := prometheus.NewHistogramVec(opts, []string{"method"})
+	return n.newHTTPMetric(collector, func(next http.Handler) http.Handler {
+		return promhttp.InstrumentHandlerDuration(collector, next)
+	})
 }
 
 func (n *Namespace) NewRequestSizeMetric(handlerName string, buckets []float64) *HTTPMetric {
@@ -296,12 +297,10 @@ func (n *Namespace) NewRequestSizeMetric(handlerName string, buckets []float64) 
 		Buckets:     buckets,
 		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
-	httpMetric := &HTTPMetric{
-		collector:   prometheus.NewHistogramVec(opts, []string{}),
-		handlerType: InstrumentHandlerRequestSize,
-	}
-	n.Add(httpMetric)
-	return httpMetric
+	collector := prometheus.NewHistogramVec(opts, []string{})
+	return n.newHTTPMetric(collector, func(next http.Handler) http.Handler {
+		return promhttp.InstrumentHandlerRequestSize(collector, next)
+	})
 }
 
 func (n *Namespace) NewResponseSizeMetric(handlerName string, buckets []float64) *HTTPMetric {
@@ -316,10 +315,8 @@ func (n *Namespace) NewResponseSizeMetric(handlerName string, buckets []float64)
 		Buckets:     buckets,
 		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
-	httpMetric := &HTTPMetric{
-		collector:   prometheus.NewHistogramVec(opts, []string{}),
-		handlerType: InstrumentHandlerResponseSize,
-	}
-	n.Add(httpMetric)
-	return httpMetric
+	collector := prometheus.NewHistogramVec(opts, []string{})
+	return n.newHTTPMetric(collector, func(next http.Handler) http.Handler {
+		return promhttp.InstrumentHandlerResponseSize(collector, next)
+	})
 }
