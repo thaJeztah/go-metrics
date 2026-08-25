@@ -1,6 +1,6 @@
 module github.com/docker/go-metrics
 
-go 1.20
+go 1.21
 
 require github.com/prometheus/client_golang v1.20.5
 

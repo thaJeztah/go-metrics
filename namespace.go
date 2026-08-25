@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"maps"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -14,13 +15,10 @@ type Labels map[string]string
 // labels allows const labels to be added to all metrics created in this namespace
 // and are commonly used for data like application version and git commit
 func NewNamespace(name, subsystem string, labels Labels) *Namespace {
-	if labels == nil {
-		labels = make(map[string]string)
-	}
 	return &Namespace{
 		name:      name,
 		subsystem: subsystem,
-		labels:    labels,
+		labels:    prometheus.Labels(maps.Clone(labels)),
 	}
 }
 
@@ -28,7 +26,7 @@ func NewNamespace(name, subsystem string, labels Labels) *Namespace {
 type Namespace struct {
 	name      string
 	subsystem string
-	labels    Labels
+	labels    prometheus.Labels
 	mu        sync.Mutex
 	metrics   []prometheus.Collector
 }
@@ -67,7 +65,7 @@ func (n *Namespace) newCounterOpts(name, help string) prometheus.CounterOpts {
 		Subsystem:   n.subsystem,
 		Name:        makeName(name, Total),
 		Help:        help,
-		ConstLabels: prometheus.Labels(n.labels),
+		ConstLabels: n.labels,
 	}
 }
 
@@ -109,7 +107,7 @@ func (n *Namespace) newTimerOpts(name, help string, buckets []float64) prometheu
 		Subsystem:   n.subsystem,
 		Name:        makeName(name, Seconds),
 		Help:        help,
-		ConstLabels: prometheus.Labels(n.labels),
+		ConstLabels: n.labels,
 	}
 	if len(buckets) > 0 {
 		opts.Buckets = buckets
@@ -139,7 +137,7 @@ func (n *Namespace) newGaugeOpts(name, help string, unit Unit) prometheus.GaugeO
 		Subsystem:   n.subsystem,
 		Name:        makeName(name, unit),
 		Help:        help,
-		ConstLabels: prometheus.Labels(n.labels),
+		ConstLabels: n.labels,
 	}
 }
 
@@ -174,20 +172,28 @@ func (n *Namespace) NewDesc(name, help string, unit Unit, labels ...string) *pro
 		namespace += "_" + n.subsystem
 	}
 	name = namespace + "_" + name
-	return prometheus.NewDesc(name, help, labels, prometheus.Labels(n.labels))
+	return prometheus.NewDesc(name, help, labels, n.labels)
 }
 
-// mergeLabels merges two or more labels objects into a single map, favoring
-// the later labels.
-func mergeLabels(lbs ...Labels) Labels {
-	merged := make(Labels)
-
-	for _, target := range lbs {
-		for k, v := range target {
-			merged[k] = v
-		}
+// withHandlerLabel returns a copy of labels with the "handler" label set
+// to handlerName.
+func withHandlerLabel(labels prometheus.Labels, handlerName string) prometheus.Labels {
+	out := maps.Clone(labels)
+	if out == nil {
+		out = make(prometheus.Labels)
 	}
+	out["handler"] = handlerName
+	return out
+}
 
+// mergeLabels returns a new label map containing base and overrides.
+// Labels in overrides take precedence over labels in base.
+func mergeLabels(base prometheus.Labels, overrides Labels) prometheus.Labels {
+	merged := maps.Clone(base)
+	if merged == nil {
+		merged = make(prometheus.Labels, len(overrides))
+	}
+	maps.Copy(merged, overrides)
 	return merged
 }
 
@@ -226,15 +232,13 @@ func (n *Namespace) NewHttpMetricsWithOpts(handlerName string, opts HTTPHandlerO
 }
 
 func (n *Namespace) NewInFlightGaugeMetric(handlerName string) *HTTPMetric {
-	labels := prometheus.Labels(n.labels)
-	labels["handler"] = handlerName
 	httpMetric := &HTTPMetric{
 		Collector: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace:   n.name,
 			Subsystem:   n.subsystem,
 			Name:        "in_flight_requests",
 			Help:        "The in-flight HTTP requests",
-			ConstLabels: prometheus.Labels(labels),
+			ConstLabels: withHandlerLabel(n.labels, handlerName),
 		}),
 		handlerType: InstrumentHandlerInFlight,
 	}
@@ -243,8 +247,6 @@ func (n *Namespace) NewInFlightGaugeMetric(handlerName string) *HTTPMetric {
 }
 
 func (n *Namespace) NewRequestTotalMetric(handlerName string) *HTTPMetric {
-	labels := prometheus.Labels(n.labels)
-	labels["handler"] = handlerName
 	httpMetric := &HTTPMetric{
 		Collector: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -252,7 +254,7 @@ func (n *Namespace) NewRequestTotalMetric(handlerName string) *HTTPMetric {
 				Subsystem:   n.subsystem,
 				Name:        "requests_total",
 				Help:        "Total number of HTTP requests made.",
-				ConstLabels: prometheus.Labels(labels),
+				ConstLabels: withHandlerLabel(n.labels, handlerName),
 			},
 			[]string{"code", "method"},
 		),
@@ -266,15 +268,13 @@ func (n *Namespace) NewRequestDurationMetric(handlerName string, buckets []float
 	if len(buckets) == 0 {
 		panic("DurationBuckets must be provided")
 	}
-	labels := prometheus.Labels(n.labels)
-	labels["handler"] = handlerName
 	opts := prometheus.HistogramOpts{
 		Namespace:   n.name,
 		Subsystem:   n.subsystem,
 		Name:        "request_duration_seconds",
 		Help:        "The HTTP request latencies in seconds.",
 		Buckets:     buckets,
-		ConstLabels: prometheus.Labels(labels),
+		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
 	httpMetric := &HTTPMetric{
 		Collector:   prometheus.NewHistogramVec(opts, []string{"method"}),
@@ -288,15 +288,13 @@ func (n *Namespace) NewRequestSizeMetric(handlerName string, buckets []float64) 
 	if len(buckets) == 0 {
 		panic("RequestSizeBuckets must be provided")
 	}
-	labels := prometheus.Labels(n.labels)
-	labels["handler"] = handlerName
 	opts := prometheus.HistogramOpts{
 		Namespace:   n.name,
 		Subsystem:   n.subsystem,
 		Name:        "request_size_bytes",
 		Help:        "The HTTP request sizes in bytes.",
 		Buckets:     buckets,
-		ConstLabels: prometheus.Labels(labels),
+		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
 	httpMetric := &HTTPMetric{
 		Collector:   prometheus.NewHistogramVec(opts, []string{}),
@@ -310,15 +308,13 @@ func (n *Namespace) NewResponseSizeMetric(handlerName string, buckets []float64)
 	if len(buckets) == 0 {
 		panic("ResponseSizeBuckets must be provided")
 	}
-	labels := prometheus.Labels(n.labels)
-	labels["handler"] = handlerName
 	opts := prometheus.HistogramOpts{
 		Namespace:   n.name,
 		Subsystem:   n.subsystem,
 		Name:        "response_size_bytes",
 		Help:        "The HTTP response sizes in bytes.",
 		Buckets:     buckets,
-		ConstLabels: prometheus.Labels(labels),
+		ConstLabels: withHandlerLabel(n.labels, handlerName),
 	}
 	httpMetric := &HTTPMetric{
 		Collector:   prometheus.NewHistogramVec(opts, []string{}),
