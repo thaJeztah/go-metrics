@@ -9,7 +9,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-type Labels map[string]string
+// Labels represents a collection of metric label names and values.
+type Labels = prometheus.Labels
 
 // NewNamespace returns a namespaces that is responsible for managing a collection of
 // metrics for a particual namespace and subsystem
@@ -20,7 +21,7 @@ func NewNamespace(name, subsystem string, labels Labels) *Namespace {
 	return &Namespace{
 		name:      name,
 		subsystem: subsystem,
-		labels:    prometheus.Labels(maps.Clone(labels)),
+		labels:    maps.Clone(labels),
 	}
 }
 
