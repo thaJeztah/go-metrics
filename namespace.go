@@ -11,11 +11,9 @@ import (
 
 type Labels map[string]string
 
-// NewNamespace returns a namespaces that is responsible for managing a collection of
-// metrics for a particual namespace and subsystem
-//
-// labels allows const labels to be added to all metrics created in this namespace
-// and are commonly used for data like application version and git commit
+// NewNamespace returns a namespace for metrics that share the given namespace
+// and subsystem. labels are added as constant labels to metrics created by the
+// namespace.
 func NewNamespace(name, subsystem string, labels Labels) *Namespace {
 	return &Namespace{
 		name:      name,
@@ -49,12 +47,15 @@ func (n *Namespace) WithConstLabels(labels Labels) *Namespace {
 	return ns
 }
 
+// NewCounter creates and adds a counter to the namespace.
 func (n *Namespace) NewCounter(name, help string) Counter {
 	c := &counter{pc: prometheus.NewCounter(n.newCounterOpts(name, help))}
 	n.Add(c)
 	return c
 }
 
+// NewLabeledCounter creates and adds a counter with the given variable labels
+// to the namespace.
 func (n *Namespace) NewLabeledCounter(name, help string, labels ...string) LabeledCounter {
 	c := &labeledCounter{pc: prometheus.NewCounterVec(n.newCounterOpts(name, help), labels)}
 	n.Add(c)
@@ -71,6 +72,7 @@ func (n *Namespace) newCounterOpts(name, help string) prometheus.CounterOpts {
 	}
 }
 
+// NewTimer creates and adds a timer to the namespace.
 func (n *Namespace) NewTimer(name, help string) Timer {
 	t := &timer{
 		m: prometheus.NewHistogram(n.newTimerOpts(name, help, []float64{})),
@@ -79,6 +81,8 @@ func (n *Namespace) NewTimer(name, help string) Timer {
 	return t
 }
 
+// NewTimerWithBuckets creates and adds a timer with the given histogram buckets
+// to the namespace.
 func (n *Namespace) NewTimerWithBuckets(name, help string, buckets []float64) Timer {
 	t := &timer{
 		m: prometheus.NewHistogram(n.newTimerOpts(name, help, buckets)),
@@ -87,6 +91,8 @@ func (n *Namespace) NewTimerWithBuckets(name, help string, buckets []float64) Ti
 	return t
 }
 
+// NewLabeledTimer creates and adds a timer with the given variable labels to
+// the namespace.
 func (n *Namespace) NewLabeledTimer(name, help string, labels ...string) LabeledTimer {
 	t := &labeledTimer{
 		m: prometheus.NewHistogramVec(n.newTimerOpts(name, help, []float64{}), labels),
@@ -95,6 +101,8 @@ func (n *Namespace) NewLabeledTimer(name, help string, labels ...string) Labeled
 	return t
 }
 
+// NewLabeledTimerWithBuckets creates and adds a timer with the given histogram
+// buckets and variable labels to the namespace.
 func (n *Namespace) NewLabeledTimerWithBuckets(name, help string, buckets []float64, labels ...string) LabeledTimer {
 	t := &labeledTimer{
 		m: prometheus.NewHistogramVec(n.newTimerOpts(name, help, buckets), labels),
@@ -117,6 +125,7 @@ func (n *Namespace) newTimerOpts(name, help string, buckets []float64) prometheu
 	return opts
 }
 
+// NewGauge creates and adds a gauge with the given unit to the namespace.
 func (n *Namespace) NewGauge(name, help string, unit Unit) Gauge {
 	g := &gauge{
 		pg: prometheus.NewGauge(n.newGaugeOpts(name, help, unit)),
@@ -125,6 +134,8 @@ func (n *Namespace) NewGauge(name, help string, unit Unit) Gauge {
 	return g
 }
 
+// NewLabeledGauge creates and adds a gauge with the given unit and variable
+// labels to the namespace.
 func (n *Namespace) NewLabeledGauge(name, help string, unit Unit, labels ...string) LabeledGauge {
 	g := &labeledGauge{
 		pg: prometheus.NewGaugeVec(n.newGaugeOpts(name, help, unit), labels),
@@ -143,6 +154,9 @@ func (n *Namespace) newGaugeOpts(name, help string, unit Unit) prometheus.GaugeO
 	}
 }
 
+// Describe sends the descriptions of all metrics in the namespace to ch.
+//
+// Describe implements [prometheus.Collector].
 func (n *Namespace) Describe(ch chan<- *prometheus.Desc) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -152,6 +166,9 @@ func (n *Namespace) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
+// Collect sends all metrics in the namespace to ch.
+//
+// Collect implements [prometheus.Collector].
 func (n *Namespace) Collect(ch chan<- prometheus.Metric) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -161,12 +178,15 @@ func (n *Namespace) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
+// Add adds collector to the namespace.
 func (n *Namespace) Add(collector prometheus.Collector) {
 	n.mu.Lock()
 	n.metrics = append(n.metrics, collector)
 	n.mu.Unlock()
 }
 
+// NewDesc returns a Prometheus metric descriptor using the namespace,
+// subsystem, constant labels, and given variable labels.
 func (n *Namespace) NewDesc(name, help string, unit Unit, labels ...string) *prometheus.Desc {
 	name = makeName(name, unit)
 	namespace := n.name
@@ -206,6 +226,8 @@ func makeName(name string, unit Unit) string {
 	return name + "_" + string(unit)
 }
 
+// NewDefaultHttpMetrics creates and adds the default set of HTTP metrics for
+// handlerName using the default histogram buckets.
 func (n *Namespace) NewDefaultHttpMetrics(handlerName string) []*HTTPMetric {
 	return n.NewHttpMetricsWithOpts(handlerName, HTTPHandlerOpts{
 		DurationBuckets:     defaultDurationBuckets,
@@ -214,6 +236,8 @@ func (n *Namespace) NewDefaultHttpMetrics(handlerName string) []*HTTPMetric {
 	})
 }
 
+// NewHttpMetrics creates and adds the default set of HTTP metrics for
+// handlerName using the given histogram buckets.
 func (n *Namespace) NewHttpMetrics(handlerName string, durationBuckets, requestSizeBuckets, responseSizeBuckets []float64) []*HTTPMetric {
 	return n.NewHttpMetricsWithOpts(handlerName, HTTPHandlerOpts{
 		DurationBuckets:     durationBuckets,
@@ -222,6 +246,8 @@ func (n *Namespace) NewHttpMetrics(handlerName string, durationBuckets, requestS
 	})
 }
 
+// NewHttpMetricsWithOpts creates and adds the configured set of HTTP metrics
+// for handlerName.
 func (n *Namespace) NewHttpMetricsWithOpts(handlerName string, opts HTTPHandlerOpts) []*HTTPMetric {
 	var httpMetrics []*HTTPMetric
 	inFlightMetric := n.NewInFlightGaugeMetric(handlerName)
@@ -238,6 +264,8 @@ func (n *Namespace) newHTTPMetric(collector prometheus.Collector, wrap func(http
 	return &HTTPMetric{collector: collector, wrap: wrap}
 }
 
+// NewInFlightGaugeMetric creates and adds a metric that tracks the number of
+// in-flight HTTP requests for handlerName.
 func (n *Namespace) NewInFlightGaugeMetric(handlerName string) *HTTPMetric {
 	collector := prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   n.name,
@@ -251,6 +279,8 @@ func (n *Namespace) NewInFlightGaugeMetric(handlerName string) *HTTPMetric {
 	})
 }
 
+// NewRequestTotalMetric creates and adds a metric that counts HTTP requests for
+// handlerName by response code and method.
 func (n *Namespace) NewRequestTotalMetric(handlerName string) *HTTPMetric {
 	collector := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -267,6 +297,8 @@ func (n *Namespace) NewRequestTotalMetric(handlerName string) *HTTPMetric {
 	})
 }
 
+// NewRequestDurationMetric creates and adds a metric that records HTTP request
+// durations for handlerName using the given histogram buckets.
 func (n *Namespace) NewRequestDurationMetric(handlerName string, buckets []float64) *HTTPMetric {
 	if len(buckets) == 0 {
 		panic("DurationBuckets must be provided")
@@ -285,6 +317,8 @@ func (n *Namespace) NewRequestDurationMetric(handlerName string, buckets []float
 	})
 }
 
+// NewRequestSizeMetric creates and adds a metric that records HTTP request
+// sizes for handlerName using the given histogram buckets.
 func (n *Namespace) NewRequestSizeMetric(handlerName string, buckets []float64) *HTTPMetric {
 	if len(buckets) == 0 {
 		panic("RequestSizeBuckets must be provided")
@@ -303,6 +337,8 @@ func (n *Namespace) NewRequestSizeMetric(handlerName string, buckets []float64) 
 	})
 }
 
+// NewResponseSizeMetric creates and adds a metric that records HTTP response
+// sizes for handlerName using the given histogram buckets.
 func (n *Namespace) NewResponseSizeMetric(handlerName string, buckets []float64) *HTTPMetric {
 	if len(buckets) == 0 {
 		panic("ResponseSizeBuckets must be provided")

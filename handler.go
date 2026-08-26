@@ -7,7 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// HTTPHandlerOpts describes a set of configurable options of http metrics
+// HTTPHandlerOpts configures HTTP instrumentation metrics.
 type HTTPHandlerOpts struct {
 	DurationBuckets     []float64
 	RequestSizeBuckets  []float64
@@ -42,16 +42,20 @@ var (
 	defaultResponseSizeBuckets = defaultRequestSizeBuckets
 )
 
-// Handler returns the global http.Handler that provides the prometheus
-// metrics format on GET requests. This handler is no longer instrumented.
+// Handler is a convenience wrapper around [promhttp.Handler] that returns an
+// HTTP handler serving metrics from the default Prometheus gatherer.
 func Handler() http.Handler {
 	return promhttp.Handler()
 }
 
+// InstrumentHandler returns an HTTP handler function that instruments handler
+// with the provided HTTP metrics.
 func InstrumentHandler(metrics []*HTTPMetric, handler http.Handler) http.HandlerFunc {
 	return instrumentHandler(metrics, handler)
 }
 
+// InstrumentHandlerFunc returns an HTTP handler function that instruments
+// handlerFunc with the provided HTTP metrics.
 func InstrumentHandlerFunc(metrics []*HTTPMetric, handlerFunc http.HandlerFunc) http.HandlerFunc {
 	return instrumentHandler(metrics, handlerFunc)
 }
